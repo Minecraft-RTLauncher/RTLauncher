@@ -3111,7 +3111,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rtl-launcher"
+name = "rtlauncher"
 version = "0.1.0"
 dependencies = [
  "serde",
