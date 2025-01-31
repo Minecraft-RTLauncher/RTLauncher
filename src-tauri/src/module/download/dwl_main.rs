@@ -1,3 +1,7 @@
+// ***
+// 下载主方法
+// ***
+
 use crate::utils::request;
 use futures::stream::{self, StreamExt};
 use reqwest;
@@ -7,7 +11,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
-use std::env::consts::OS;
+use super::get_user_os;
+use super::decompression::decompression;
 
 pub struct Download {
     pub version_manifest_url: String, // 获取版本url
@@ -148,6 +153,7 @@ impl DownloadOptions {
 
         let mut success_count = 0;
         let mut failed_count = 0;
+        let current_os = get_user_os(); // 获取当前操作系统
 
         // 1. 客户端jar
         let jar_start = std::time::Instant::now();
@@ -323,22 +329,67 @@ impl DownloadOptions {
 
             if let Some(libraries) = json_value.get("libraries") {
                 if let Some(libraries_array) = libraries.as_array() {
-                    // 修改下载任务准备，加入SHA1
+                    // 存储需要解压的文件信息
+                    let natives_to_extract = Arc::new(Mutex::new(Vec::new()));
+                    
+                    // 2.下载库文件
                     let download_tasks: Vec<_> = libraries_array
                         .iter()
                         .filter_map(|library| {
                             let downloads = library.get("downloads")?;
-                            let artifact = downloads.get("artifact")?;
+                            let mut is_native = false;
+
+                            // 检查是否需要解压（通过rules判断）
+                            if let Some(rules) = library.get("rules") {
+                                if let Some(rules_array) = rules.as_array() {
+                                    if let Some(first_rule) = rules_array.first() {
+                                        if let Some(os) = first_rule.get("os") {
+                                            if let Some(name) = os.get("name").and_then(|n| n.as_str()) {
+                                                if name == current_os {
+                                                    // 如果rules第一项的os.name匹配当前系统，标记为需要解压
+                                                    is_native = true;
+                                                    println!("📦 发现需要解压的natives库: {}", 
+                                                        library.get("name").and_then(|n| n.as_str()).unwrap_or("unknown"));
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 根据是否需要解压选择不同的下载源
+                            let artifact = if is_native {
+                                // 处理natives库
+                                let natives_key = match current_os.as_str() {
+                                    "windows" => "natives-windows",
+                                    "osx" => "natives-macos",
+                                    "linux" => "natives-linux",
+                                    _ => return None,
+                                };
+                                
+                                if let Some(classifiers) = downloads.get("classifiers") {
+                                    if let Some(native_download) = classifiers.get(natives_key) {
+                                        native_download
+                                    } else {
+                                        downloads.get("artifact")?
+                                    }
+                                } else {
+                                    downloads.get("artifact")?
+                                }
+                            } else {
+                                downloads.get("artifact")?
+                            };
+
                             let url = artifact["url"].as_str()?;
                             let path = artifact.get("path").and_then(|p| p.as_str())?;
-                            let sha1 = artifact["sha1"].as_str()?; // 获取SHA1值
+                            let sha1 = artifact["sha1"].as_str()?;
                             let library_path = libraries_path.join(path);
 
                             if let Some(parent) = library_path.parent() {
                                 let _ = std::fs::create_dir_all(parent);
                             }
-
-                            Some((url.to_string(), library_path, sha1.to_string()))
+                            
+                            Some((url.to_string(), library_path, sha1.to_string(), is_native))
                         })
                         .collect();
 
@@ -346,14 +397,21 @@ impl DownloadOptions {
                     let progress = DownloadProgress::new(total_libs);
                     let batch_size = 50;
                     let semaphore = Arc::new(tokio::sync::Semaphore::new(batch_size));
+                    let success_counter = Arc::new(AtomicUsize::new(0));
+                    let failed_counter = Arc::new(AtomicUsize::new(0));
 
                     println!("🚀 开始下载 {} 个库文件...", total_libs);
 
-                    // 修改下载流程，加入SHA1验证
+                    // 下载库文件
                     stream::iter(download_tasks)
-                        .map(|(url, path, sha1)| {
+                        .map(|(url, path, sha1, is_native)| {
                             let semaphore = semaphore.clone();
                             let progress = progress.clone();
+                            let natives_to_extract = natives_to_extract.clone();
+                            let version_path = version_path.clone();
+                            let version_id = version_id.to_string();
+                            let success_counter = success_counter.clone();
+                            let failed_counter = failed_counter.clone();
 
                             async move {
                                 let _permit = semaphore.acquire().await.unwrap();
@@ -367,16 +425,18 @@ impl DownloadOptions {
                                 .await
                                 {
                                     Ok(info) => {
-                                        println!(
-                                            "✅ 库文件下载成功: {} -> {}",
-                                            info.url,
-                                            info.path.display()
-                                        );
-                                        success_count += 1;
+                                        if is_native {
+                                            // 将需要解压的文件信息存储起来
+                                            let mut natives = natives_to_extract.lock().unwrap();
+                                            natives.push((info.path.clone(), version_id.clone()));
+                                            println!("✅ natives库下载成功，已加入解压队列: {}", info.path.display());
+                                        }
+                                        println!("✅ 库文件下载成功: {} -> {}", info.url, info.path.display());
+                                        success_counter.fetch_add(1, Ordering::SeqCst);
                                     }
                                     Err(e) => {
                                         println!("❌ 库文件下载失败: {} -> {}", url, e);
-                                        failed_count += 1;
+                                        failed_counter.fetch_add(1, Ordering::SeqCst);
                                     }
                                 }
                             }
@@ -384,6 +444,46 @@ impl DownloadOptions {
                         .buffer_unordered(batch_size)
                         .collect::<Vec<_>>()
                         .await;
+
+                    // 所有文件下载完成后，开始解压natives库
+                    let natives = natives_to_extract.lock().unwrap().clone();
+                    
+                    if !natives.is_empty() {
+                        println!("📦 开始解压 {} 个natives库...", natives.len());
+                        
+                        for (file_path, version_id) in natives {
+                            let natives_dir = version_path.join(format!("{}-natives", &version_id));
+                            println!("🔄 正在解压: {}", file_path.display());
+                            println!("📂 解压目标目录: {}", natives_dir.display());
+                            
+                            // 在新线程中执行解压操作
+                            if let Err(e) = tokio::task::spawn_blocking(move || {
+                                if let Err(e) = std::fs::create_dir_all(&natives_dir) {
+                                    println!("❌ 创建natives目录失败: {}", e);
+                                    return Err(e.to_string());
+                                }
+                                
+                                match decompression(file_path.to_str().unwrap(), &version_id) {
+                                    Ok(_) => {
+                                        println!("✅ natives库解压成功: {}", file_path.display());
+                                        Ok(())
+                                    }
+                                    Err(e) => {
+                                        println!("❌ natives库解压失败: {} -> {}", file_path.display(), e);
+                                        Err(e.to_string())
+                                    }
+                                }
+                            }).await.unwrap() {
+                                println!("❌ 解压过程出错: {}", e);
+                                failed_counter.fetch_add(1, Ordering::SeqCst);
+                            }
+                        }
+                        
+                        println!("📦 natives库解压完成");
+                    }
+
+                    success_count = success_counter.load(Ordering::SeqCst);
+                    failed_count = failed_counter.load(Ordering::SeqCst);
 
                     println!(
                         "📊 Libraries下载完成: 成功 {}, 失败 {}",
@@ -395,12 +495,13 @@ impl DownloadOptions {
             (success_count, failed_count, libs_start.elapsed())
         };
 
-        // 并行执行两个任务
-        let (assets_result, libraries_result) = tokio::join!(assets_future, libraries_future);
-
-        // 处理结果
-        let assets_result = assets_result?; // 处理 Result
-        let (libs_success, libs_failed, libs_duration) = libraries_result;
+        // 修改执行顺序，先执行 libraries 下载和解压
+        let libraries_result = libraries_future.await;
+        let (_libs_success, _libs_failed, libs_duration) = libraries_result;
+        
+        // 然后执行资源索引文件下载
+        let assets_result = assets_future.await;
+        let _assets_result = assets_result?;
 
         // 添加耗时统计
         timings.push(("Libraries".to_string(), libs_duration));
@@ -588,11 +689,5 @@ pub async fn fetch_download_minecraft() -> Result<(), String> {
     ));
     let res = download.dwl_version_manifest().await.unwrap();
     println!("{}", res);
-    Ok(())
-}
-
-#[tokio::test]
-pub async fn get_system_info_main() -> Result<(), String> {
-    println!("{:#?}", OS);
     Ok(())
 }

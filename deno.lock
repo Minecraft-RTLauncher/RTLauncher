@@ -497,7 +497,7 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
-        "npm:@tauri-apps/api@2",
+        "npm:@tauri-apps/api@^2.2.0",
         "npm:@tauri-apps/cli@2",
         "npm:@tauri-apps/plugin-opener@2",
         "npm:@vitejs/plugin-vue@^5.2.1",

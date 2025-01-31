@@ -1,39 +1,32 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from '@tauri-apps/api/core';
 
-const greetMsg = ref("");
-const name = ref("");
+async function login() {
+  const login = await invoke('login');
+  console.log(login);
+}
 
-async function greet() {
-  // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-  greetMsg.value = await invoke("greet", { name: name.value });
+async function getUserInfo() {
+  const userInfo = await invoke('get_user_info');
+  console.log(userInfo);
+}
+
+async function downloadMinecraft() {
+  const download = await invoke('dwl_version_manifest', {url: 'https://piston-meta.mojang.com/v1/packages/af26a4b3605f891007f08000846909840e80784a/25w05a.json'});
+  console.log(download);
+}
+
+async function startGame() {
+  const start = await invoke('start_game');
+  console.log(start);
 }
 </script>
 
 <template>
-  <main class="container">
-    <h1>Welcome to Tauri + Vue</h1>
-
-    <div class="row">
-      <a href="https://vitejs.dev" target="_blank">
-        <img src="/vite.svg" class="logo vite" alt="Vite logo" />
-      </a>
-      <a href="https://tauri.app" target="_blank">
-        <img src="/tauri.svg" class="logo tauri" alt="Tauri logo" />
-      </a>
-      <a href="https://vuejs.org/" target="_blank">
-        <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
-      </a>
-    </div>
-    <p>Click on the Tauri, Vite, and Vue logos to learn more.</p>
-
-    <form class="row" @submit.prevent="greet">
-      <input id="greet-input" v-model="name" placeholder="Enter a name..." />
-      <button type="submit">Greet</button>
-    </form>
-    <p>{{ greetMsg }}</p>
-  </main>
+  <button @click="login">登录</button>
+  <button @click="getUserInfo">获取用户信息</button>
+  <button @click="downloadMinecraft">下载我的世界</button>
+  <button @click="startGame">启动游戏</button>
 </template>
 
 <style scoped>
@@ -44,7 +37,6 @@ async function greet() {
 .logo.vue:hover {
   filter: drop-shadow(0 0 2em #249b73);
 }
-
 </style>
 <style>
 :root {
@@ -156,5 +148,4 @@ button {
     background-color: #0f0f0f69;
   }
 }
-
 </style>
