@@ -1,8 +1,8 @@
 {
     "$schema": "https://schema.tauri.app/config/2",
-    "productName": "rtl-launcher",
+    "productName": "rtlauncher",
     "version": "0.1.0",
-    "identifier": "org.rtl-launcher.app",
+    "identifier": "org.rtlauncher.app",
     "build": {
         "beforeDevCommand": "deno task dev",
         "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
     "app": {
         "windows": [
             {
-                "title": "rtl-launcher",
+                "title": "rtlauncher",
                 "width": 800,
                 "height": 600
             }

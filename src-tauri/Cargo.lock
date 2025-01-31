@@ -3680,6 +3680,7 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "rmp"
 version = "0.8.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3702,6 +3703,9 @@ dependencies = [
 
 [[package]]
 name = "rtl-launcher"
+=======
+name = "rtlauncher"
+>>>>>>> 6ce69cf0e65025749d9fe2845200c67357251635
 version = "0.1.0"
 dependencies = [
  "futures",
