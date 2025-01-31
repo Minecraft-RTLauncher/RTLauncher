@@ -3,22 +3,29 @@ import { invoke } from '@tauri-apps/api/core';
 
 async function login() {
   const login = await invoke('login');
-  console.log(login);
+  console.log('登录: ', login);
 }
 
 async function getUserInfo() {
   const userInfo = await invoke('get_user_info');
-  console.log(userInfo);
+  console.log('获取用户信息: ', userInfo);
 }
 
 async function downloadMinecraft() {
-  const download = await invoke('dwl_version_manifest', {url: 'https://piston-meta.mojang.com/v1/packages/af26a4b3605f891007f08000846909840e80784a/25w05a.json'});
-  console.log(download);
+  const download = await invoke('dwl_version_manifest', {
+    url: 'https://piston-meta.mojang.com/v1/packages/af26a4b3605f891007f08000846909840e80784a/25w05a.json',
+  });
+  console.log('下载文件: ', download);
 }
 
 async function startGame() {
   const start = await invoke('start_game');
-  console.log(start);
+  console.log('启动游戏: ', start);
+}
+
+async function getJavaPath() {
+  const javaPath = await invoke('get_java_path');
+  console.log('java_home路径: ', javaPath);
 }
 </script>
 
@@ -27,6 +34,7 @@ async function startGame() {
   <button @click="getUserInfo">获取用户信息</button>
   <button @click="downloadMinecraft">下载我的世界</button>
   <button @click="startGame">启动游戏</button>
+  <button @click="getJavaPath">获取java_home路径</button>
 </template>
 
 <style scoped>
