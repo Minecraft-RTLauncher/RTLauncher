@@ -3,10 +3,11 @@ use std::fs::File;
 use std::io::Read;
 use zip;
 
-// 修改解压方法，添加 version_id 参数
+// 解压文件
 pub fn decompression(path: &str, version_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("开始解压文件: {}", path);
     let file = File::open(path)?;
+
     let mut archive = zip::ZipArchive::new(file)?;
     
     // 构建natives目录路径 (.minecraft/version/版本号/版本号-natives)
