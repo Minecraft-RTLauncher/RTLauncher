@@ -21,10 +21,10 @@ jobs:
       with:
         deno-version: '2.1.8'  # 使用你指定的 Deno 版本
 
-    - name: Install dependencies for glib and gobject
+    - name: Install dependencies for glib, gobject, and gdk
       run: |
         sudo apt-get update
-        sudo apt-get install -y pkg-config libglib2.0-dev
+        sudo apt-get install -y pkg-config libglib2.0-dev libgobject-2.0-dev libgdk-3.0-dev
 
     - name: Install Deno dependencies
       run: deno install
