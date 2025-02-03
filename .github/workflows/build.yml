@@ -1,85 +1,38 @@
-name: Tauri CI
+name: Deno Tauri Dev (Windows)
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
-  build:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 25
+  deno-tauri:
+    runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v2
 
-      - name: Configure system dependencies
-        run: |
-          # 添加必要仓库源
-          sudo apt-add-repository -y universe
-          sudo apt-add-repository -y multiverse
-          
-          # 安装基础编译工具链
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libssl-dev \
-            libgtk-3-dev \
-            libjavascriptcoregtk-4.1-dev \  # 替代旧版 WebKit 组件
-            libsoup-3.0-dev \               # 使用 Soup3 替代 2.4
-            libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-1 \
-            libdbus-1-dev \
-            xvfb \
-            libappindicator3-dev
+    - name: Set up Deno
+      uses: denoland/setup-deno@v1
+      with:
+        deno-version: '2.1.8'
 
-      - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-          components: rust-src
-          profile: minimal
+    - name: Install GTK and related dependencies
+      run: |
+        choco install gtk-runtime
+        # 安装GTK的Windows版本，可以通过chocolatey或手动下载和安装
 
-      - name: Install Deno
-        uses: denoland/setup-deno@v1
-        with:
-          deno-version: 2.1.8
-          v8-flags: --max-old-space-size=4096
+    - name: Install pkg-config
+      run: |
+        choco install pkg-config
+        # 使用chocolatey安装pkg-config工具
 
-      - name: Cache optimization
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/deno
-            ~/.cargo/registry
-            ~/.cargo/git
-            src-tauri/target
-          key: ${{ runner.os }}-${{ hashFiles('**/deno.lock', '**/Cargo.lock') }}
+    - name: Install Deno dependencies
+      run: deno install
 
-      - name: Dependency installation
-        run: |
-          # Node.js 依赖
-          deno task --cwd src-tauri npm:install
-          
-          # Deno 模块
-          deno cache --lock=deno.lock --lock-write **/*.ts
-          
-          # Rust 依赖
-          cargo fetch --manifest-path src-tauri/Cargo.toml
-
-      - name: Build with Xvfb
-        env:
-          DISPLAY: :99
-          CARGO_TERM_COLOR: always
-        run: |
-          # 启动虚拟显示
-          Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
-          sleep 15  # 增加等待时间确保显示服务就绪
-          
-          # 执行构建
-          deno task tauri build --release
+    - name: Run Tauri Dev
+      run: deno task tauri dev
