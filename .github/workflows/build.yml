@@ -20,18 +20,18 @@ jobs:
       uses: denoland/setup-deno@v1
       with:
         deno-version: '2.1.8'  # 使用你指定的 Deno 版本
-        
+
     - name: Install GTK3, libsoup, and related dependencies
       run: |
         sudo apt update
         sudo apt install libwebkit2gtk-4.0-dev \
         build-essential \
-       curl \
-       wget \
+        curl \
+        wget \
         libssl-dev \
         libgtk-3-dev \
-       libayatana-appindicator3-dev \
-       librsvg2-dev
+        libayatana-appindicator3-dev \
+        librsvg2-dev
 
 
 
