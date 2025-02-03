@@ -2,7 +2,7 @@
 import { invoke } from '@tauri-apps/api/core';
 
 async function login() {
-  const login = await invoke('login');
+  const login = await invoke('get_code');
   console.log('登录: ', login);
 }
 
