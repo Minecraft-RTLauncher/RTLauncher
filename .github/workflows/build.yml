@@ -8,28 +8,35 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04  # 明确指定 LTS 版本
-    timeout-minutes: 20
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install system dependencies
+      - name: Configure system dependencies
         run: |
+          # 添加必要仓库源
+          sudo apt-add-repository -y universe
+          sudo apt-add-repository -y multiverse
+          
+          # 安装基础编译工具链
           sudo apt-get update
           sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \  # 更新后的包名
-            libgtk-3-dev \
-            libayatana-appindicator3-1 \
             build-essential \
             curl \
             wget \
             file \
             libssl-dev \
-            librust-openssl-dev \
-            libsoup2.4-dev \
-            xvfb
+            libgtk-3-dev \
+            libjavascriptcoregtk-4.1-dev \  # 替代旧版 WebKit 组件
+            libsoup-3.0-dev \               # 使用 Soup3 替代 2.4
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-1 \
+            libdbus-1-dev \
+            xvfb \
+            libappindicator3-dev
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -44,9 +51,8 @@ jobs:
           deno-version: 2.1.8
           v8-flags: --max-old-space-size=4096
 
-      - name: Cache dependencies
+      - name: Cache optimization
         uses: actions/cache@v3
-        id: cache
         with:
           path: |
             ~/.cache/deno
@@ -55,17 +61,25 @@ jobs:
             src-tauri/target
           key: ${{ runner.os }}-${{ hashFiles('**/deno.lock', '**/Cargo.lock') }}
 
-      - name: Install project dependencies
+      - name: Dependency installation
         run: |
+          # Node.js 依赖
           deno task --cwd src-tauri npm:install
+          
+          # Deno 模块
           deno cache --lock=deno.lock --lock-write **/*.ts
-          cargo generate-lockfile --manifest-path src-tauri/Cargo.toml
+          
+          # Rust 依赖
+          cargo fetch --manifest-path src-tauri/Cargo.toml
 
-      - name: Build Tauri application
+      - name: Build with Xvfb
         env:
           DISPLAY: :99
           CARGO_TERM_COLOR: always
         run: |
-          Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
-          sleep 10
-          deno task tauri build --verbose
+          # 启动虚拟显示
+          Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
+          sleep 15  # 增加等待时间确保显示服务就绪
+          
+          # 执行构建
+          deno task tauri build --release
