@@ -27,4 +27,4 @@ jobs:
       run: deno install
 
     - name: Run Tauri Dev
-      run: deno task tauri dev
+      run: deno task build
