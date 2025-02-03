@@ -1,49 +1,60 @@
-name: Deno Tauri Dev
+name: Tauri CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
-  deno-tauri:
+  build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Deno
-      uses: denoland/setup-deno@v1
-      with:
-        deno-version: '2.1.8'  # 使用你指定的 Deno 版本
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.0-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            xvfb
 
-    - name: Install GTK3, libsoup, and related dependencies
-      run: |
-        sudo apt update
-        sudo apt install libwebkit2gtk-4.0-dev \
-        build-essential \
-        curl \
-        wget \
-        libssl-dev \
-        libgtk-3-dev \
-        libayatana-appindicator3-dev \
-        librsvg2-dev
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rust-src
 
+      - name: Install Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: 2.1.8
 
+      - name: Cache Deno dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/deno
+            src-tauri/target
+          key: ${{ runner.os }}-deno-${{ hashFiles('**/deno.lock') }}-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Set PKG_CONFIG_PATH
-      run: |
-        # Set the correct PKG_CONFIG_PATH for pkg-config to find .pc files
-        export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/local/lib/pkgconfig
-        echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
-        # 如果你知道`.pc`文件的具体路径，可以在这里替换路径。
+      - name: Install project dependencies
+        run: |
+          deno task --cwd src-tauri npm:install
+          deno cache --lock=deno.lock --lock-write **/*.ts
 
-    - name: Install Deno dependencies
-      run: deno install
-
-    - name: Run Tauri Dev
-      run: deno task tauri dev
+      - name: Build Tauri application
+        env:
+          XVFB_WRAPPER_TIMEOUT: 300
+        run: |
+          xvfb-run --auto-servernum deno task tauri build
