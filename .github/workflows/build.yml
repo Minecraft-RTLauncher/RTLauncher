@@ -19,7 +19,7 @@ jobs:
     - name: Set up Deno
       uses: denoland/setup-deno@v1
       with:
-        deno-version: 'v1.37.3'  # 使用合适的 Deno 版本
+        deno-version: 'v2.1.8'  # 使用合适的 Deno 版本
 
     - name: Install dependencies for glib and gobject
       run: |
