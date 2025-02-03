@@ -39,4 +39,5 @@ futures-util = "0.3.31"
 sha1 = "0.10.6"
 rayon = "1.10.0"
 zip = "2.2.2"
+os_info = "3.9.2"
 

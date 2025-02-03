@@ -130,8 +130,6 @@ impl Login {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
