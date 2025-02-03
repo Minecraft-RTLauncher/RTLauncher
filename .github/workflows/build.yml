@@ -21,15 +21,7 @@ jobs:
       with:
         deno-version: '2.1.8'
 
-    - name: Install GTK and related dependencies
-      run: |
-        choco install gtk-runtime
-        # 安装GTK的Windows版本，可以通过chocolatey或手动下载和安装
 
-    - name: Install pkg-config
-      run: |
-        choco install pkg-config
-        # 使用chocolatey安装pkg-config工具
 
     - name: Install Deno dependencies
       run: deno install
