@@ -6,11 +6,6 @@ async function login() {
   console.log('登录: ', login);
 }
 
-async function getUserInfo() {
-  const userInfo = await invoke('get_user_info');
-  console.log('获取用户信息: ', userInfo);
-}
-
 async function downloadMinecraft() {
   const download = await invoke('dwl_version_manifest', {
     url: 'https://piston-meta.mojang.com/v1/packages/af26a4b3605f891007f08000846909840e80784a/25w05a.json',
@@ -19,8 +14,18 @@ async function downloadMinecraft() {
 }
 
 async function startGame() {
-  const start = await invoke('start_game');
-  console.log('启动游戏: ', start);
+  try {
+    await invoke('stg', {
+      startupParameter: JSON.stringify({
+        memory: '-Xmx4G -Xms2G',
+        // java_args: ['-XX:MaxGCPauseMillis=50'],
+        // game_args: ['--username', 'player', '--version', '1.19.2'],
+      }),
+    });
+    console.log('游戏启动成功');
+  } catch (error) {
+    console.error('游戏启动失败:', error);
+  }
 }
 
 async function getJavaPath() {
@@ -31,7 +36,6 @@ async function getJavaPath() {
 
 <template>
   <button @click="login">登录</button>
-  <button @click="getUserInfo">获取用户信息</button>
   <button @click="downloadMinecraft">下载我的世界</button>
   <button @click="startGame">启动游戏</button>
   <button @click="getJavaPath">获取java_home路径</button>

@@ -2955,6 +2955,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "os_info"
+version = "3.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e6520c8cc998c5741ee68ec1dc369fc47e5f0ea5320018ecf2a1ccd6328f48b"
+dependencies = [
+ "log",
+ "serde",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "pango"
 version = "0.18.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3709,6 +3720,7 @@ dependencies = [
  "indicatif",
  "log",
  "open",
+ "os_info",
  "path-tree",
  "rayon",
  "rcgen",
