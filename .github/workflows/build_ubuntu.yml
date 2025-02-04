@@ -1,4 +1,4 @@
-name: Deno Tauri Dev (Windows)
+name: Deno Tauri Dev (ubuntu)
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
 
 jobs:
   deno-tauri:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout repository
