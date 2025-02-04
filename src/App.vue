@@ -16,11 +16,8 @@ async function downloadMinecraft() {
 async function startGame() {
   try {
     await invoke('stg', {
-      startupParameter: JSON.stringify({
-        memory: '-Xmx4G -Xms2G',
-        // java_args: ['-XX:MaxGCPauseMillis=50'],
-        // game_args: ['--username', 'player', '--version', '1.19.2'],
-      }),
+      startupParameter: '-Xmx4G -Xms2G',
+      versionId: '25w05a',
     });
     console.log('游戏启动成功');
   } catch (error) {

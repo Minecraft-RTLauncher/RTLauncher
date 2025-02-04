@@ -13,6 +13,7 @@ use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use super::get_user_os;
 use super::decompression::decompression;
+use walkdir;
 
 pub struct Download {
     pub version_manifest_url: String, // 获取版本url
@@ -63,6 +64,66 @@ impl DownloadProgress {
 
     fn get_current(&self) -> usize {
         self.success.load(Ordering::SeqCst) + self.failed.load(Ordering::SeqCst)
+    }
+}
+
+// 添加新的路径管理结构体和实现
+pub struct MinecraftPaths {
+    pub base_dir: std::path::PathBuf,
+    pub versions_dir: std::path::PathBuf,
+    pub libraries_dir: std::path::PathBuf,
+    pub assets_dir: std::path::PathBuf,
+}
+
+impl MinecraftPaths {
+    pub fn new() -> Self {
+        let base_dir = std::path::PathBuf::from(".minecraft");
+        Self {
+            versions_dir: base_dir.join("version"),
+            libraries_dir: base_dir.join("libraries"),
+            assets_dir: base_dir.join("assets"),
+            base_dir,
+        }
+    }
+
+    pub fn get_version_dir(&self, version_id: &str) -> std::path::PathBuf {
+        self.versions_dir.join(version_id)
+    }
+
+    pub fn get_natives_dir(&self, version_id: &str) -> std::path::PathBuf {
+        self.get_version_dir(version_id).join(format!("{}-natives", version_id))
+    }
+
+    pub fn ensure_dirs(&self) -> std::io::Result<()> {
+        std::fs::create_dir_all(&self.base_dir)?;
+        std::fs::create_dir_all(&self.versions_dir)?;
+        std::fs::create_dir_all(&self.libraries_dir)?;
+        std::fs::create_dir_all(&self.assets_dir)?;
+        Ok(())
+    }
+
+    // 添加一个通用的获取绝对路径的方法
+    pub fn get_absolute_path(&self, path: std::path::PathBuf) -> String {
+        path.canonicalize()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string()
+            .trim_start_matches(r"\\?\")
+            .to_string()
+    }
+
+    // 获取libraries目录下所有jar文件的路径
+    pub fn get_libraries_classpath(&self) -> Vec<String> {
+        walkdir::WalkDir::new(&self.libraries_dir)
+            .into_iter()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| {
+                entry.path()
+                    .extension()
+                    .map_or(false, |ext| ext == "jar")
+            })
+            .map(|entry| self.get_absolute_path(entry.path().to_path_buf()))
+            .collect()
     }
 }
 
@@ -142,14 +203,12 @@ impl DownloadOptions {
         let json_value: serde_json::Value = serde_json::from_str(&res)?;
         let version_id = json_value["id"].as_str().unwrap_or("unknown");
 
-        // 创建主要目录
-        let minecraft_path = std::path::Path::new(".minecraft");
-        let version_path = minecraft_path.join("version").join(version_id);
-        let libraries_path = minecraft_path.join("libraries");
+        // 使用新的路径管理结构体
+        let paths = MinecraftPaths::new();
+        paths.ensure_dirs()?;
 
-        // 创建所需的目录
+        let version_path = paths.get_version_dir(version_id);
         std::fs::create_dir_all(&version_path)?;
-        std::fs::create_dir_all(&libraries_path)?;
 
         let mut success_count = 0;
         let mut failed_count = 0;
@@ -184,6 +243,27 @@ impl DownloadOptions {
             }
         }
 
+        // 2. 下载日志配置XML文件
+        if let Some(logging) = json_value.get("logging") {
+            if let Some(client) = logging.get("client") {
+                if let Some(file) = client.get("file") {
+                    if let Some(xml_url) = file.get("url").and_then(|u| u.as_str()) {
+                        let xml_path = version_path.join("client-1.12.xml");
+                        match download_file(xml_url.to_string(), xml_path).await {
+                            Ok(info) => {
+                                println!("✅ 日志配置文件下载成功: {} -> {}", info.url, info.path.display());
+                                success_count += 1;
+                            }
+                            Err(e) => {
+                                println!("❌ 日志配置文件下载失败: {}", e);
+                                failed_count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // 创建两个异步任务，分别处理资源索引文件和libraries
         let assets_future = async {
             let assets_start = std::time::Instant::now();
@@ -191,12 +271,9 @@ impl DownloadOptions {
 
             if let Some(asset_index) = json_value.get("assetIndex") {
                 if let Some(asset_url) = asset_index["url"].as_str() {
-                    // 下载和解析资源索引文件
-                    let asset_path = version_path.join("assets_index.json");
+                    // 直接解析资源索引文件内容
                     let response = request::Request::new(asset_url.to_string());
                     let asset_content = response.fetch_get().await?;
-                    std::fs::write(&asset_path, &asset_content)?;
-
                     let asset_json: serde_json::Value = serde_json::from_str(&asset_content)?;
 
                     if let Some(objects) = asset_json.get("objects").and_then(|o| o.as_object()) {
@@ -383,7 +460,7 @@ impl DownloadOptions {
                             let url = artifact["url"].as_str()?;
                             let path = artifact.get("path").and_then(|p| p.as_str())?;
                             let sha1 = artifact["sha1"].as_str()?;
-                            let library_path = libraries_path.join(path);
+                            let library_path = paths.libraries_dir.join(path);
 
                             if let Some(parent) = library_path.parent() {
                                 let _ = std::fs::create_dir_all(parent);
@@ -452,7 +529,7 @@ impl DownloadOptions {
                         println!("📦 开始解压 {} 个natives库...", natives.len());
                         
                         for (file_path, version_id) in natives {
-                            let natives_dir = version_path.join(format!("{}-natives", &version_id));
+                            let natives_dir = paths.get_natives_dir(&version_id);
                             println!("🔄 正在解压: {}", file_path.display());
                             println!("📂 解压目标目录: {}", natives_dir.display());
                             
