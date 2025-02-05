@@ -120,7 +120,7 @@ fn scan_for_java_installation() -> Vec<String> {
             "C:\\Program Files (x86)\\Java",
             "D:\\Program Files\\Java",
             "D:\\Program Files (x86)\\Java",
-            "D:\\.xmcl\\jre\\java-runtime-delta",
+            
         ],
         "macos" => vec![
             "/Library/Java/JavaVirtualMachines",

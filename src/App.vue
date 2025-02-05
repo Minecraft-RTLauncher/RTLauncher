@@ -16,9 +16,11 @@ async function downloadMinecraft() {
 async function startGame() {
   try {
     await invoke('stg', {
-      startupParameter: '-Xmx4G -Xms2G',
+      startupParameter: '-Xmx1024m -Xms1024m',
       versionId: '25w05a',
+      javaVersion: '21',
     });
+
     console.log('游戏启动成功');
   } catch (error) {
     console.error('游戏启动失败:', error);
