@@ -77,7 +77,8 @@ pub struct MinecraftPaths {
 
 impl MinecraftPaths {
     pub fn new() -> Self {
-        let base_dir = std::path::PathBuf::from(".minecraft");
+        // 游戏文件保存路径
+        let base_dir = std::path::PathBuf::from("D:\\Desktop\\.minecraft");
         Self {
             versions_dir: base_dir.join("version"),
             libraries_dir: base_dir.join("libraries"),
@@ -277,12 +278,23 @@ impl DownloadOptions {
                     let asset_content = response.fetch_get().await?;
                     let asset_json: serde_json::Value = serde_json::from_str(&asset_content)?;
 
-                    if let Some(objects) = asset_json.get("objects").and_then(|o| o.as_object()) {
-                        let assets_path = std::path::Path::new(".minecraft").join("assets");
+                    // 保存资源索引文件
+                    let assets_index_path = paths.assets_dir.join("indexes").join(format!("{}.json", version_id));
+                    if let Some(parent) = assets_index_path.parent() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                    std::fs::write(&assets_index_path, &asset_content)?;
+                    println!("✅ 资源索引文件已保存到: {}", assets_index_path.display());
+
+                    if let Some(objects) = asset_json.get("objects") {
+                        let paths = MinecraftPaths::new();
+                        let assets_path = paths.assets_dir;
                         std::fs::create_dir_all(&assets_path)?;
 
                         // 准备下载任务
                         let download_tasks: Vec<(String, std::path::PathBuf, String)> = objects
+                            .as_object()
+                            .unwrap()
                             .iter()
                             .filter_map(|(_, value)| {
                                 let hash = value.get("hash").and_then(|h| h.as_str())?;
@@ -291,8 +303,7 @@ impl DownloadOptions {
                                     "https://resources.download.minecraft.net/{}/{}",
                                     hash_prefix, hash
                                 );
-                                let object_path =
-                                    assets_path.join("objects").join(hash_prefix).join(hash);
+                                let object_path = assets_path.join("objects").join(hash_prefix).join(hash);
 
                                 if let Some(parent) = object_path.parent() {
                                     let _ = std::fs::create_dir_all(parent);
