@@ -21,7 +21,8 @@ struct StartGame {
 // 启动游戏参数
 struct StartGameArgs {
     java_path: String,
-    version_id: String,  // 添加版本号字段
+    version_id: String,
+    java_version: String,  // 添加Java版本字段
 }
 
 // 定义JSON结构体
@@ -32,10 +33,10 @@ struct GameConfig {
 
 // 共享方法到前端
 #[tauri::command]
-pub async fn stg(startup_parameter: String, version_id: String) -> Result<(), String> {
-    let start_game = StartGame::new(startup_parameter, version_id);
+pub async fn stg(startup_parameter: String, version_id: String, java_version: String) -> Result<String, String> {
+    let start_game = StartGame::new(startup_parameter, version_id, java_version);
     match start_game.start_game() {
-        Ok(_) => Ok(()),
+        Ok(output) => Ok(output),
         Err(e) => Err(format!("游戏启动失败: {}", e)),
     }
 }
@@ -50,12 +51,31 @@ pub fn get_game_jar_path(version_id: &str) -> String {
 }
 
 impl StartGame {
-    pub fn new(startup_parameter: String, version_id: String) -> Self {
+    pub fn new(startup_parameter: String, version_id: String, java_version: String) -> Self {
         let java_paths = get_java_path();
-        let java_path = java_paths.first()
-            .map(|path| match OS {
-                "windows" => format!("{}\\bin\\java.exe", path),
-                _ => format!("{}/bin/java", path), // 修正 Linux 和 macOS 的路径分隔符
+        let java_path = java_paths.iter()
+            .find_map(|path| {
+                let possible_paths = match OS {
+                    "windows" => vec![
+                        format!("{}\\bin\\javaw.exe", path),
+                        format!("{}\\javaw.exe", path),
+                        format!("{}\\javapath\\javaw.exe", path)
+                    ],
+                    _ => vec![
+                        format!("{}/bin/java", path),
+                        format!("{}/java", path)
+                    ]
+                };
+                
+                // 遍历所有可能的路径，检查Java版本
+                for p in possible_paths {
+                    if let Ok(version) = Self::get_java_version(&p) {
+                        if version.contains(&java_version) {
+                            return Some(p);
+                        }
+                    }
+                }
+                None
             })
             .unwrap_or_default();
 
@@ -65,6 +85,17 @@ impl StartGame {
             java_path,
             launch_args,
         }
+    }
+
+    // 新增：获取Java版本的函数
+    fn get_java_version(java_path: &str) -> Result<String, String> {
+        let output = Command::new(java_path)
+            .arg("-version")
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        let version_info = String::from_utf8_lossy(&output.stderr).to_string();
+        Ok(version_info)
     }
 
     pub fn load_launch_args(startup_parameter: String, version_id: &str) -> Vec<String> {
@@ -89,7 +120,11 @@ impl StartGame {
         // 获取所有libraries的jar文件路径
         let mut classpath = paths.get_libraries_classpath();
         classpath.push(get_game_jar_path(version_id));
-        let libraries_path = classpath.join(if OS == "windows" { ";" } else { ":" });
+        // 将libraries_path中的路径用分隔符连接
+        let libraries_path = classpath.iter()
+            .map(|path| format!("\"{}\"", path))
+            .collect::<Vec<String>>()
+            .join(if OS == "windows" { ";" } else { ":" });
 
         // 分割内存参数并添加到启动参数中
         let memory_args: Vec<String> = startup_parameter
@@ -121,30 +156,34 @@ impl StartGame {
             format!("-Dminecraft.client.jar={}", game_jar_route),
             format!("-Dlog4j.configurationFile={}", log4j_config_path),
             format!("-Djava.library.path={}",natives_path),
-            format!("-cp {}", libraries_path)
+            "-cp".to_string(),
+            libraries_path,
+            "net.minecraft.client.main.Main".to_string(),
         ]);
 
         args
     }
 
-    pub fn start_game(&self) -> Result<(), String> {
+    pub fn start_game(&self) -> Result<String, String> {
         let mut command = match OS {
             "windows" | "linux" | "macos" => Command::new(&self.java_path),
             _ => return Err("不支持的操作系统".to_string()),
         };
 
-        // 添加动态加载的启动参数
         command.args(&self.launch_args);
 
         // 打印启动命令和参数
-        println!("启动命令: {}", &self.java_path);
+        println!("启动Java: {}", &self.java_path);
         println!("启动参数: {:?}", &self.launch_args);
 
-        // 执行命令
-        match command.spawn() {
-            Ok(_) => {
+        // 执行命令并等待输出
+        match command.output() {
+            Ok(output) => {
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                let combined_output = format!("标准输出:\n{}\n错误输出:\n{}", stdout, stderr);
                 println!("游戏启动成功");
-                Ok(())
+                Ok(combined_output)
             }
             Err(e) => {
                 println!("游戏启动失败: {}", e);

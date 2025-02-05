@@ -102,13 +102,14 @@ impl MinecraftPaths {
         Ok(())
     }
 
-    // 添加一个通用的获取绝对路径的方法
+    // 获取绝对路径-公共方法
     pub fn get_absolute_path(&self, path: std::path::PathBuf) -> String {
         path.canonicalize()
             .unwrap_or_default()
             .to_string_lossy()
             .to_string()
             .trim_start_matches(r"\\?\")
+
             .to_string()
     }
 
