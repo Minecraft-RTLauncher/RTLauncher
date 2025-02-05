@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { invoke } from '@tauri-apps/api/core';
 
+// 登录
 async function login() {
   const login = await invoke('get_code');
   console.log('登录: ', login);
 }
 
+// 下载
 async function downloadMinecraft() {
   const download = await invoke('dwl_version_manifest', {
     url: 'https://piston-meta.mojang.com/v1/packages/af26a4b3605f891007f08000846909840e80784a/25w05a.json',
@@ -13,23 +15,33 @@ async function downloadMinecraft() {
   console.log('下载文件: ', download);
 }
 
+// 启动游戏
+
 async function startGame() {
   try {
-    await invoke('stg', {
+    const result = await invoke('stg', {
       startupParameter: '-Xmx1024m -Xms1024m',
       versionId: '25w05a',
       javaVersion: '21',
+
     });
 
-    console.log('游戏启动成功');
+    console.log('游戏启动成功', result);
   } catch (error) {
     console.error('游戏启动失败:', error);
   }
 }
 
+// 获取java_home路径
 async function getJavaPath() {
   const javaPath = await invoke('get_java_path');
   console.log('java_home路径: ', javaPath);
+}
+
+// 导出启动脚本
+async function exportScript() {
+  const script = await invoke('export_bat');
+  console.log('启动脚本: ', script);
 }
 </script>
 
@@ -37,8 +49,11 @@ async function getJavaPath() {
   <button @click="login">登录</button>
   <button @click="downloadMinecraft">下载我的世界</button>
   <button @click="startGame">启动游戏</button>
+
   <button @click="getJavaPath">获取java_home路径</button>
+  <button @click="exportScript">导出启动脚本</button>
 </template>
+
 
 <style scoped>
 .logo.vite:hover {

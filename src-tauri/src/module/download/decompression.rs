@@ -5,6 +5,7 @@
 use super::get_user_os;
 use std::fs::File;
 use zip;
+use crate::module::download::paths::MinecraftPaths;
 
 
 // 获取系统CPU架构
@@ -57,10 +58,9 @@ pub fn decompression(path: &str, version_id: &str) -> Result<(), Box<dyn std::er
     let file = File::open(path)?;
     let mut archive = zip::ZipArchive::new(file)?;
     
-    // 构建natives目录路径
-    let minecraft_dir = std::path::Path::new(".minecraft");
-    let version_dir = minecraft_dir.join("version").join(version_id);
-    let natives_dir = version_dir.join(format!("{}-natives", version_id));
+    // 使用统一的路径管理
+    let paths = MinecraftPaths::new();
+    let natives_dir = paths.get_natives_dir(version_id);
     
     println!("📂 解压目标目录: {}", natives_dir.display());
     
