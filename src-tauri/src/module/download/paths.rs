@@ -30,6 +30,7 @@ impl MinecraftPaths {
         self.get_version_dir(version_id).join(format!("{}-natives", version_id))
     }
 
+    #[allow(dead_code)]
     pub fn ensure_dirs(&self) -> std::io::Result<()> {
         std::fs::create_dir_all(&self.base_dir)?;
         std::fs::create_dir_all(&self.versions_dir)?;
@@ -38,6 +39,7 @@ impl MinecraftPaths {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn get_absolute_path(&self, path: PathBuf) -> String {
         path.canonicalize()
             .unwrap_or_default()
@@ -47,6 +49,7 @@ impl MinecraftPaths {
             .to_string()
     }
 
+    #[allow(dead_code)]
     pub fn get_libraries_classpath(&self) -> Vec<String> {
         walkdir::WalkDir::new(&self.libraries_dir)
             .into_iter()

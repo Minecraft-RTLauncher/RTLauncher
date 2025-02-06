@@ -13,7 +13,7 @@ use walkdir::WalkDir;
 pub fn get_java_path() -> Vec<String> {
     let mut java_paths = Vec::new();
 
-    // 首先尝试从环境变量获取 JAVA_HOME
+    // 从环境变量获取 JAVA_HOME
     if let Ok(java_home) = std::env::var("JAVA_HOME") {
         if Path::new(&java_home).exists() {
             java_paths.push(java_home);

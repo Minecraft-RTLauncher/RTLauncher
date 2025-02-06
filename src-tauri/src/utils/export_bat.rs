@@ -1,38 +1,36 @@
 // ***
-// 导出启动脚本
+// 导出启动脚本的功能，生成一个 .bat 文件供启动游戏使用
 // ***
 
-use crate::module::start_game::stg_main::{StartGame, get_game_jar_path};
-use crate::module::download::dwl_main::MinecraftPaths;
+use std::fs::File;
+use std::io::Write;
+use crate::module::start_game::stg_main::StartGame;
 
 #[tauri::command]
-pub fn export_bat(startup_parameter: String, version_id: String, java_version: String) -> String {
-    // 创建StartGame实例获取启动参数
-    let start_game = StartGame::new(startup_parameter, version_id, java_version);
+pub async fn export_bat(
+    startup_parameter: String,
+    version_id: String,
+    java_version: String,
+    output_path: String,
+    asset_index_id: String,
+    username: String,
+) -> Result<String, String> {
+    let start_game = StartGame::new(startup_parameter, version_id, java_version, asset_index_id, username);
+    let full_command = format!("\"{}\" {}", start_game.java_path, start_game.launch_args.join(" "));
+
+    // 生成 .bat 文件内容
+    let content = format!("@echo off\r\n{}\r\npause\r\n", full_command);
     
-    // 获取工作目录
-    let paths = MinecraftPaths::new();
-    let work_dir = paths.base_dir.display().to_string();
+    // 将内容写入指定的 .bat 文件
+    match File::create(&output_path) {
+        Ok(mut file) => {
+            if let Err(e) = file.write_all(content.as_bytes()) {
+                return Err(format!("写入文件失败: {}", e));
+            }
+        },
+        Err(e) => return Err(format!("创建文件失败: {}", e)),
+    }
     
-    // 组装批处理文件内容
-    let mut bat_content = String::new();
-    
-    // 添加切换工作目录命令
-    bat_content.push_str(&format!("cd /d \"{}\"\n", work_dir));
-    
-    // 添加启动命令
-    bat_content.push_str(&format!("\"{}\"{}", 
-        start_game.java_path,
-        start_game.launch_args.iter()
-            .map(|arg| format!(" \"{}\"", arg))
-            .collect::<String>()
-    ));
-    
-    // 添加暂停命令，这样在游戏关闭后窗口不会立即关闭
-    bat_content.push_str("\npause");
-    
-    bat_content
+    Ok("批处理文件已成功导出".to_string())
 }
-
-
 
