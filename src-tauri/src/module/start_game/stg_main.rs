@@ -4,12 +4,9 @@
 
 use crate::utils::get_java_path::get_java_path;
 use os_info;
-use serde::Deserialize;
-use serde_json;
 use std::env::consts::OS;
 
 use crate::module::download::dwl_main::MinecraftPaths;
-use std::fmt::format;
 use std::process::Command;
 
 // 启动游戏结构体
@@ -18,34 +15,24 @@ pub struct StartGame {
     pub launch_args: Vec<String>,
 }
 
-// 启动游戏参数
-struct StartGameArgs {
-    java_path: String,
-    version_id: String,
-    java_version: String, // 添加Java版本字段
-}
-
-// 定义JSON结构体
-#[derive(Deserialize)]
-struct GameConfig {
-    memory: Option<String>, // 只保留内存设置
-}
-
 // 共享方法到前端
 #[tauri::command]
 pub async fn stg(
     startup_parameter: String,
     version_id: String,
     java_version: String,
+    asset_index_id: String,
+    username: String,
 ) -> Result<String, String> {
-    let start_game = StartGame::new(startup_parameter, version_id, java_version);
+    let start_game = StartGame::new(startup_parameter, version_id, java_version, asset_index_id, username);
     match start_game.start_game() {
+
         Ok(output) => Ok(output),
         Err(e) => Err(format!("游戏启动失败: {}", e)),
     }
 }
 
-// 修改 get_game_jar_path 函数，使用通用方法
+// 获取游戏jar路径
 pub fn get_game_jar_path(version_id: &str) -> String {
     let paths = MinecraftPaths::new();
     let jar_path = paths
@@ -56,7 +43,13 @@ pub fn get_game_jar_path(version_id: &str) -> String {
 }
 
 impl StartGame {
-    pub fn new(startup_parameter: String, version_id: String, java_version: String) -> Self {
+    pub fn new(
+        startup_parameter: String,
+        version_id: String,
+        java_version: String,
+        asset_index_id: String,
+        username: String,
+    ) -> Self {
         let java_paths = get_java_path();
         let java_path = java_paths
             .iter()
@@ -82,7 +75,7 @@ impl StartGame {
             })
             .unwrap_or_default();
 
-        let launch_args = Self::load_launch_args(startup_parameter, &version_id);
+        let launch_args = Self::load_launch_args(startup_parameter, &version_id, &asset_index_id, username);
 
         Self {
             java_path,
@@ -90,7 +83,7 @@ impl StartGame {
         }
     }
 
-    // 新增：获取Java版本的函数
+    // 获取java版本
     fn get_java_version(java_path: &str) -> Result<String, String> {
         let output = Command::new(java_path)
             .arg("-version")
@@ -101,7 +94,12 @@ impl StartGame {
         Ok(version_info)
     }
 
-    pub fn load_launch_args(startup_parameter: String, version_id: &str) -> Vec<String> {
+    pub fn load_launch_args(
+        startup_parameter: String,
+        version_id: &str,
+        asset_index_id: &str,
+        username: String,
+    ) -> Vec<String> {
         let mut args = Vec::new();
         let info = os_info::get();
         let os_name = info.os_type().to_string();
@@ -124,7 +122,7 @@ impl StartGame {
         let mut classpath = paths.get_libraries_classpath();
         classpath.push(get_game_jar_path(version_id));
 
-        // 修改classpath的处理方式
+        // 获取classpath路径
         let libraries_path = if OS == "windows" {
             format!("{}", classpath.join(";"))
         } else {
@@ -156,21 +154,27 @@ impl StartGame {
             "-XX:-OmitStackTraceInFastThrow".to_string(),
             format!("-Dos.name={}", os_name),
             format!("-Dos.version={}", os_version),
-            "-Dminecraft.launcher.brand=RTLauncher".to_string(),
+            "-Dminecraft.launcher.brand=RTL".to_string(),
             "-Dminecraft.launcher.version=0.1.1".to_string(),
-            format!("-Dminecraft.client.jar=\"{}\"", game_jar_route),
-            format!("-Dlog4j.configurationFile=\"{}\"", log4j_config_path),
-            format!("-Djava.library.path=\"{}\"", natives_path),
+            format!("-Dminecraft.client.jar={}", game_jar_route),
+            format!("-Dlog4j.configurationFile={}", log4j_config_path),
+            format!("-Djava.library.path={}", natives_path),
             "-cp".to_string(),
-            format!("\"{}\"", libraries_path),
+            libraries_path,
             "net.minecraft.client.main.Main".to_string(),
             "--version".to_string(),
-            "25w05a".to_string(),
+            version_id.to_string(),
+            "--username".to_string(),
+            username,
             "--accessToken".to_string(),
             "00000FFFFFFFFFFFFFFFFFFFFFF9E747".to_string(),
-            "--gameDir \"D:\\Desktop\\.minecraft\\version\\25w05a\"".to_string(),
-            "--assetsDir \"D:\\Desktop\\.minecraft\\assets\\objects\"".to_string(),
-            "--assetIndex 25w05a".to_string(),
+            "--gameDir".to_string(),
+            paths.base_dir.to_string_lossy().into_owned(),
+            "--assetsDir".to_string(),
+            paths.assets_dir.to_string_lossy().into_owned(),
+            "--assetIndex".to_string(),
+            asset_index_id.to_string(),
+
         ]);
 
         args
@@ -189,10 +193,7 @@ impl StartGame {
         command.args(&self.launch_args);
 
         // 完整的启动命令
-        let full_command = format!("{} {}", 
-            &self.java_path, 
-            &self.launch_args.join(" ")
-        );
+        let full_command = format!("\"{}\" {}", &self.java_path, &self.launch_args.join(" "));
         println!("完整启动命令: {}", full_command);
         println!("工作目录: {}", paths.base_dir.display());
 
@@ -200,11 +201,11 @@ impl StartGame {
         println!("启动Java: {}", &self.java_path);
         println!("启动参数: {:?}", &self.launch_args);
 
-        // 使用spawn而不是output来启动进程
+        // 启动游戏进程
         match command.spawn() {
             Ok(mut child) => {
                 println!("游戏启动成功，进程ID: {:?}", child.id());
-                
+
                 // 等待游戏进程结束
                 match child.wait() {
                     Ok(status) => {

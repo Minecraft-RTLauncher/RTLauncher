@@ -26,17 +26,19 @@ pub struct DownloadOptions {
     pub version_id: String, // 版本号
 }
 
-// 修改 DownloadInfo 结构体，添加下载进度跟踪
+// 下载信息
 #[derive(Clone)]
 struct DownloadInfo {
     url: String,
+
     path: std::path::PathBuf,
     size: u64,
     downloaded: Arc<AtomicUsize>,
 }
 
-// 添加新的结构体来跟踪下载进度
+// 下载进度
 #[derive(Clone)]
+
 struct DownloadProgress {
     total: Arc<AtomicUsize>,
     current: Arc<AtomicUsize>,
@@ -67,13 +69,14 @@ impl DownloadProgress {
     }
 }
 
-// 添加新的路径管理结构体和实现
+// 路径管理
 pub struct MinecraftPaths {
     pub base_dir: std::path::PathBuf,
     pub versions_dir: std::path::PathBuf,
     pub libraries_dir: std::path::PathBuf,
     pub assets_dir: std::path::PathBuf,
 }
+
 
 impl MinecraftPaths {
     pub fn new() -> Self {
@@ -159,11 +162,11 @@ pub async fn dwl_version_manifest(url: String) -> Result<serde_json::Value, Stri
     };
 
     let download = DownloadOptions::new(url);
-    let res = download
+    let (json_value, _) = download
         .dwl_version_manifest()
         .await
         .map_err(|e| e.to_string())?;
-    Ok(res)
+    Ok(json_value)
 }
 
 impl Download {
@@ -196,7 +199,7 @@ impl DownloadOptions {
     // 下载游戏资源
     pub async fn dwl_version_manifest(
         &self,
-    ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<(serde_json::Value, String), Box<dyn std::error::Error + Send + Sync>> {
         let response = request::Request::new(self.url.clone());
         let res = response.fetch_get().await?;
         let mut timings = Vec::new();
@@ -204,10 +207,18 @@ impl DownloadOptions {
         // 解析json
         let json_value: serde_json::Value = serde_json::from_str(&res)?;
         let version_id = json_value["id"].as_str().unwrap_or("unknown");
+        
+        // 获取asset_index_id
+        let asset_index_id = json_value
+            .get("assetIndex")
+            .and_then(|asset_index| asset_index.get("id"))
+            .and_then(|id| id.as_str())
+            .unwrap_or("unknown")
+            .to_string();
 
-        // 使用新的路径管理结构体
         let paths = MinecraftPaths::new();
         paths.ensure_dirs()?;
+
 
         let version_path = paths.get_version_dir(version_id);
         std::fs::create_dir_all(&version_path)?;
@@ -272,14 +283,15 @@ impl DownloadOptions {
             let mut result: Result<(), Box<dyn std::error::Error + Send + Sync>> = Ok(());
 
             if let Some(asset_index) = json_value.get("assetIndex") {
+                let asset_id = asset_index["id"].as_str().unwrap_or("unknown");
+                println!("asset_id: {}", asset_id);
                 if let Some(asset_url) = asset_index["url"].as_str() {
                     // 直接解析资源索引文件内容
                     let response = request::Request::new(asset_url.to_string());
                     let asset_content = response.fetch_get().await?;
                     let asset_json: serde_json::Value = serde_json::from_str(&asset_content)?;
-
                     // 保存资源索引文件
-                    let assets_index_path = paths.assets_dir.join("indexes").join(format!("{}.json", version_id));
+                    let assets_index_path = paths.assets_dir.join("indexes").join(format!("{}.json", asset_id));
                     if let Some(parent) = assets_index_path.parent() {
                         std::fs::create_dir_all(parent)?;
                     }
@@ -497,7 +509,6 @@ impl DownloadOptions {
                             let semaphore = semaphore.clone();
                             let progress = progress.clone();
                             let natives_to_extract = natives_to_extract.clone();
-                            let version_path = version_path.clone();
                             let version_id = version_id.to_string();
                             let success_counter = success_counter.clone();
                             let failed_counter = failed_counter.clone();
@@ -635,7 +646,7 @@ impl DownloadOptions {
         if failed_count > 0 {
             Err("部分文件下载失败".into())
         } else {
-            Ok(json_value)
+            Ok((json_value, asset_index_id))
         }
     }
 }
@@ -671,10 +682,11 @@ async fn download_with_progress(
     })
 }
 
-// 修改重试下载函数
+// 重试下载
 async fn download_file_with_retry(
     url: String,
     path: std::path::PathBuf,
+
     progress: Option<DownloadProgress>,
     max_retries: u32,
 ) -> Result<DownloadInfo, Box<dyn std::error::Error + Send + Sync>> {
@@ -761,6 +773,7 @@ async fn download_and_verify_file(
     Ok(result)
 }
 
+// 获取版本清单[test]
 #[tokio::test]
 pub async fn get_version_manifest_main() -> Result<(), String> {
     let version_manifest = Download::new(String::from(
@@ -771,12 +784,13 @@ pub async fn get_version_manifest_main() -> Result<(), String> {
     Ok(())
 }
 
+// 下载文件[test]
 #[tokio::test]
 pub async fn fetch_download_minecraft() -> Result<(), String> {
     let download = DownloadOptions::new(String::from(
-        "https://piston-meta.moja…04ca1285508c/25w04a.json",
+        "https://piston-meta.mojang.com/v1/packages/c440b9ef34fec9d69388de8650cd55b465116587/1.21.4.json",
     ));
     let res = download.dwl_version_manifest().await.unwrap();
-    println!("{}", res);
+    println!("{:?}", res);
     Ok(())
 }
