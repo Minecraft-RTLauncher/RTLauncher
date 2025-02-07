@@ -1,0 +1,30 @@
+name: Deno Tauri Dev (macos_intel)
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  deno-tauri:
+    runs-on: macos-13
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Deno
+      uses: denoland/setup-deno@v1
+      with:
+        deno-version: '2.1.8'
+
+
+
+    - name: Install Deno dependencies
+      run: deno install
+
+    - name: Run Tauri Dev
+      run: deno task build
