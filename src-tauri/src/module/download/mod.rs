@@ -1,5 +1,6 @@
 pub mod dwl_main;
 pub mod decompression;
+pub mod paths;
 
 use std::env::consts::OS;
 

@@ -1,45 +1,72 @@
 <script setup lang="ts">
 import { invoke } from '@tauri-apps/api/core';
+import { ref } from 'vue';
 
+const username = ref('风吹裤裆蛋蛋凉');
+
+// 登录
 async function login() {
   const login = await invoke('get_code');
   console.log('登录: ', login);
 }
 
+// 下载
 async function downloadMinecraft() {
   const download = await invoke('dwl_version_manifest', {
-    url: 'https://piston-meta.mojang.com/v1/packages/af26a4b3605f891007f08000846909840e80784a/25w05a.json',
+    url: 'https://piston-meta.mojang.com/v1/packages/c440b9ef34fec9d69388de8650cd55b465116587/1.21.4.json',
   });
   console.log('下载文件: ', download);
 }
 
-async function startGame() {
+// 启动游戏
+async function startGame(username: string) {
   try {
-    await invoke('stg', {
-      startupParameter: JSON.stringify({
-        memory: '-Xmx4G -Xms2G',
-        // java_args: ['-XX:MaxGCPauseMillis=50'],
-        // game_args: ['--username', 'player', '--version', '1.19.2'],
-      }),
+    const result = await invoke('stg', {
+      startupParameter: '-Xmx1024m -Xms1024m',
+      versionId: '1.21.4',
+      javaVersion: '21',
+      assetIndexId: '19',
+      username: username,
     });
-    console.log('游戏启动成功');
+
+    console.log('游戏启动成功', result);
   } catch (error) {
     console.error('游戏启动失败:', error);
   }
 }
 
+// 获取java_home路径
 async function getJavaPath() {
   const javaPath = await invoke('get_java_path');
   console.log('java_home路径: ', javaPath);
+}
+
+// 导出启动脚本
+async function exportScript() {
+  const script = await invoke('export_bat', {
+    startupParameter: '-Xmx1024m -Xms1024m',
+    versionId: '1.21.4',
+    javaVersion: '21',
+    outputPath: 'D:\\Desktop\\start_game.bat',
+  });
+  console.log('启动脚本: ', script);
 }
 </script>
 
 <template>
   <button @click="login">登录</button>
   <button @click="downloadMinecraft">下载我的世界</button>
-  <button @click="startGame">启动游戏</button>
+  <button @click="startGame(username)">启动游戏</button>
+
   <button @click="getJavaPath">获取java_home路径</button>
+  <button @click="exportScript">导出启动脚本</button>
+  <br />
+  <div>
+    <label for="username">用户名</label>
+    <input type="text" id="username" v-model="username" />
+  </div>
 </template>
+
 
 <style scoped>
 .logo.vite:hover {

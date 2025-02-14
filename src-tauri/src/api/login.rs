@@ -1,9 +1,14 @@
+// ***
+// 登录主函数
+// ***
+
 use crate::utils::request;
 use log::info;
 use open;
 use request::Request;
 use std::error::Error;
 use std::io::{BufRead, Write};
+
 use url;
 
 // Tauri共享

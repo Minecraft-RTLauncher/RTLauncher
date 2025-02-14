@@ -1,5 +1,10 @@
+// ***
+// 请求工具类
+// ***
+
 use reqwest::Client;
 use std::error::Error;
+
 
 #[derive(Clone)]
 pub struct Request {
