@@ -13,6 +13,7 @@ use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use super::get_user_os;
 use super::decompression::decompression;
+use walkdir;
 
 pub struct Download {
     pub version_manifest_url: String, // 获取版本url
@@ -25,17 +26,19 @@ pub struct DownloadOptions {
     pub version_id: String, // 版本号
 }
 
-// 修改 DownloadInfo 结构体，添加下载进度跟踪
+// 下载信息
 #[derive(Clone)]
 struct DownloadInfo {
     url: String,
+
     path: std::path::PathBuf,
     size: u64,
     downloaded: Arc<AtomicUsize>,
 }
 
-// 添加新的结构体来跟踪下载进度
+// 下载进度
 #[derive(Clone)]
+
 struct DownloadProgress {
     total: Arc<AtomicUsize>,
     current: Arc<AtomicUsize>,
@@ -63,6 +66,69 @@ impl DownloadProgress {
 
     fn get_current(&self) -> usize {
         self.success.load(Ordering::SeqCst) + self.failed.load(Ordering::SeqCst)
+    }
+}
+
+// 路径管理
+pub struct MinecraftPaths {
+    pub base_dir: std::path::PathBuf,
+    pub versions_dir: std::path::PathBuf,
+    pub libraries_dir: std::path::PathBuf,
+    pub assets_dir: std::path::PathBuf,
+}
+
+
+impl MinecraftPaths {
+    pub fn new() -> Self {
+        // 游戏文件保存路径
+        let base_dir = std::path::PathBuf::from("D:\\Desktop\\.minecraft");
+        Self {
+            versions_dir: base_dir.join("version"),
+            libraries_dir: base_dir.join("libraries"),
+            assets_dir: base_dir.join("assets"),
+            base_dir,
+        }
+    }
+
+    pub fn get_version_dir(&self, version_id: &str) -> std::path::PathBuf {
+        self.versions_dir.join(version_id)
+    }
+
+    pub fn get_natives_dir(&self, version_id: &str) -> std::path::PathBuf {
+        self.get_version_dir(version_id).join(format!("{}-natives", version_id))
+    }
+
+    pub fn ensure_dirs(&self) -> std::io::Result<()> {
+        std::fs::create_dir_all(&self.base_dir)?;
+        std::fs::create_dir_all(&self.versions_dir)?;
+        std::fs::create_dir_all(&self.libraries_dir)?;
+        std::fs::create_dir_all(&self.assets_dir)?;
+        Ok(())
+    }
+
+    // 获取绝对路径-公共方法
+    pub fn get_absolute_path(&self, path: std::path::PathBuf) -> String {
+        path.canonicalize()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string()
+            .trim_start_matches(r"\\?\")
+
+            .to_string()
+    }
+
+    // 获取libraries目录下所有jar文件的路径
+    pub fn get_libraries_classpath(&self) -> Vec<String> {
+        walkdir::WalkDir::new(&self.libraries_dir)
+            .into_iter()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| {
+                entry.path()
+                    .extension()
+                    .map_or(false, |ext| ext == "jar")
+            })
+            .map(|entry| self.get_absolute_path(entry.path().to_path_buf()))
+            .collect()
     }
 }
 
@@ -96,11 +162,11 @@ pub async fn dwl_version_manifest(url: String) -> Result<serde_json::Value, Stri
     };
 
     let download = DownloadOptions::new(url);
-    let res = download
+    let (json_value, _) = download
         .dwl_version_manifest()
         .await
         .map_err(|e| e.to_string())?;
-    Ok(res)
+    Ok(json_value)
 }
 
 impl Download {
@@ -133,7 +199,7 @@ impl DownloadOptions {
     // 下载游戏资源
     pub async fn dwl_version_manifest(
         &self,
-    ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<(serde_json::Value, String), Box<dyn std::error::Error + Send + Sync>> {
         let response = request::Request::new(self.url.clone());
         let res = response.fetch_get().await?;
         let mut timings = Vec::new();
@@ -141,15 +207,21 @@ impl DownloadOptions {
         // 解析json
         let json_value: serde_json::Value = serde_json::from_str(&res)?;
         let version_id = json_value["id"].as_str().unwrap_or("unknown");
+        
+        // 获取asset_index_id
+        let asset_index_id = json_value
+            .get("assetIndex")
+            .and_then(|asset_index| asset_index.get("id"))
+            .and_then(|id| id.as_str())
+            .unwrap_or("unknown")
+            .to_string();
 
-        // 创建主要目录
-        let minecraft_path = std::path::Path::new(".minecraft");
-        let version_path = minecraft_path.join("version").join(version_id);
-        let libraries_path = minecraft_path.join("libraries");
+        let paths = MinecraftPaths::new();
+        paths.ensure_dirs()?;
 
-        // 创建所需的目录
+
+        let version_path = paths.get_version_dir(version_id);
         std::fs::create_dir_all(&version_path)?;
-        std::fs::create_dir_all(&libraries_path)?;
 
         let mut success_count = 0;
         let mut failed_count = 0;
@@ -184,27 +256,57 @@ impl DownloadOptions {
             }
         }
 
+        // 2. 下载日志配置XML文件
+        if let Some(logging) = json_value.get("logging") {
+            if let Some(client) = logging.get("client") {
+                if let Some(file) = client.get("file") {
+                    if let Some(xml_url) = file.get("url").and_then(|u| u.as_str()) {
+                        let xml_path = version_path.join("client-1.12.xml");
+                        match download_file(xml_url.to_string(), xml_path).await {
+                            Ok(info) => {
+                                println!("✅ 日志配置文件下载成功: {} -> {}", info.url, info.path.display());
+                                success_count += 1;
+                            }
+                            Err(e) => {
+                                println!("❌ 日志配置文件下载失败: {}", e);
+                                failed_count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // 创建两个异步任务，分别处理资源索引文件和libraries
         let assets_future = async {
             let assets_start = std::time::Instant::now();
             let mut result: Result<(), Box<dyn std::error::Error + Send + Sync>> = Ok(());
 
             if let Some(asset_index) = json_value.get("assetIndex") {
+                let asset_id = asset_index["id"].as_str().unwrap_or("unknown");
+                println!("asset_id: {}", asset_id);
                 if let Some(asset_url) = asset_index["url"].as_str() {
-                    // 下载和解析资源索引文件
-                    let asset_path = version_path.join("assets_index.json");
+                    // 直接解析资源索引文件内容
                     let response = request::Request::new(asset_url.to_string());
                     let asset_content = response.fetch_get().await?;
-                    std::fs::write(&asset_path, &asset_content)?;
-
                     let asset_json: serde_json::Value = serde_json::from_str(&asset_content)?;
+                    // 保存资源索引文件
+                    let assets_index_path = paths.assets_dir.join("indexes").join(format!("{}.json", asset_id));
+                    if let Some(parent) = assets_index_path.parent() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                    std::fs::write(&assets_index_path, &asset_content)?;
+                    println!("✅ 资源索引文件已保存到: {}", assets_index_path.display());
 
-                    if let Some(objects) = asset_json.get("objects").and_then(|o| o.as_object()) {
-                        let assets_path = std::path::Path::new(".minecraft").join("assets");
+                    if let Some(objects) = asset_json.get("objects") {
+                        let paths = MinecraftPaths::new();
+                        let assets_path = paths.assets_dir;
                         std::fs::create_dir_all(&assets_path)?;
 
                         // 准备下载任务
                         let download_tasks: Vec<(String, std::path::PathBuf, String)> = objects
+                            .as_object()
+                            .unwrap()
                             .iter()
                             .filter_map(|(_, value)| {
                                 let hash = value.get("hash").and_then(|h| h.as_str())?;
@@ -213,8 +315,7 @@ impl DownloadOptions {
                                     "https://resources.download.minecraft.net/{}/{}",
                                     hash_prefix, hash
                                 );
-                                let object_path =
-                                    assets_path.join("objects").join(hash_prefix).join(hash);
+                                let object_path = assets_path.join("objects").join(hash_prefix).join(hash);
 
                                 if let Some(parent) = object_path.parent() {
                                     let _ = std::fs::create_dir_all(parent);
@@ -383,7 +484,7 @@ impl DownloadOptions {
                             let url = artifact["url"].as_str()?;
                             let path = artifact.get("path").and_then(|p| p.as_str())?;
                             let sha1 = artifact["sha1"].as_str()?;
-                            let library_path = libraries_path.join(path);
+                            let library_path = paths.libraries_dir.join(path);
 
                             if let Some(parent) = library_path.parent() {
                                 let _ = std::fs::create_dir_all(parent);
@@ -408,7 +509,6 @@ impl DownloadOptions {
                             let semaphore = semaphore.clone();
                             let progress = progress.clone();
                             let natives_to_extract = natives_to_extract.clone();
-                            let version_path = version_path.clone();
                             let version_id = version_id.to_string();
                             let success_counter = success_counter.clone();
                             let failed_counter = failed_counter.clone();
@@ -452,7 +552,7 @@ impl DownloadOptions {
                         println!("📦 开始解压 {} 个natives库...", natives.len());
                         
                         for (file_path, version_id) in natives {
-                            let natives_dir = version_path.join(format!("{}-natives", &version_id));
+                            let natives_dir = paths.get_natives_dir(&version_id);
                             println!("🔄 正在解压: {}", file_path.display());
                             println!("📂 解压目标目录: {}", natives_dir.display());
                             
@@ -546,7 +646,7 @@ impl DownloadOptions {
         if failed_count > 0 {
             Err("部分文件下载失败".into())
         } else {
-            Ok(json_value)
+            Ok((json_value, asset_index_id))
         }
     }
 }
@@ -582,10 +682,11 @@ async fn download_with_progress(
     })
 }
 
-// 修改重试下载函数
+// 重试下载
 async fn download_file_with_retry(
     url: String,
     path: std::path::PathBuf,
+
     progress: Option<DownloadProgress>,
     max_retries: u32,
 ) -> Result<DownloadInfo, Box<dyn std::error::Error + Send + Sync>> {
@@ -672,6 +773,7 @@ async fn download_and_verify_file(
     Ok(result)
 }
 
+// 获取版本清单[test]
 #[tokio::test]
 pub async fn get_version_manifest_main() -> Result<(), String> {
     let version_manifest = Download::new(String::from(
@@ -682,12 +784,13 @@ pub async fn get_version_manifest_main() -> Result<(), String> {
     Ok(())
 }
 
+// 下载文件[test]
 #[tokio::test]
 pub async fn fetch_download_minecraft() -> Result<(), String> {
     let download = DownloadOptions::new(String::from(
-        "https://piston-meta.moja…04ca1285508c/25w04a.json",
+        "https://piston-meta.mojang.com/v1/packages/c440b9ef34fec9d69388de8650cd55b465116587/1.21.4.json",
     ));
     let res = download.dwl_version_manifest().await.unwrap();
-    println!("{}", res);
+    println!("{:?}", res);
     Ok(())
 }
