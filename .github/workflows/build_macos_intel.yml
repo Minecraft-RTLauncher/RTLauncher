@@ -1,4 +1,4 @@
-name: Deno Tauri Dev (Windows)
+name: Deno Tauri Dev (macos_intel)
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
 
 jobs:
   deno-tauri:
-    runs-on: windows-latest
+    runs-on: macos-13
 
     steps:
     - name: Checkout repository
