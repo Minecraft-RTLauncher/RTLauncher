@@ -1,7 +1,28 @@
+/*
+RTLauncher, a third-party Minecraft launcher built with the newest
+technology and provides innovative funtionalities
+Copyright (C) 2025 lutouna
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 // ***
 // 下载主方法
 // ***
 
+use super::decompression::decompression;
+use super::get_user_os;
 use crate::utils::request;
 use futures::stream::{self, StreamExt};
 use reqwest;
@@ -11,8 +32,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
-use super::get_user_os;
-use super::decompression::decompression;
 use walkdir;
 
 pub struct Download {
@@ -77,7 +96,6 @@ pub struct MinecraftPaths {
     pub assets_dir: std::path::PathBuf,
 }
 
-
 impl MinecraftPaths {
     pub fn new() -> Self {
         // 游戏文件保存路径
@@ -95,7 +113,8 @@ impl MinecraftPaths {
     }
 
     pub fn get_natives_dir(&self, version_id: &str) -> std::path::PathBuf {
-        self.get_version_dir(version_id).join(format!("{}-natives", version_id))
+        self.get_version_dir(version_id)
+            .join(format!("{}-natives", version_id))
     }
 
     pub fn ensure_dirs(&self) -> std::io::Result<()> {
@@ -113,7 +132,6 @@ impl MinecraftPaths {
             .to_string_lossy()
             .to_string()
             .trim_start_matches(r"\\?\")
-
             .to_string()
     }
 
@@ -122,11 +140,7 @@ impl MinecraftPaths {
         walkdir::WalkDir::new(&self.libraries_dir)
             .into_iter()
             .filter_map(|entry| entry.ok())
-            .filter(|entry| {
-                entry.path()
-                    .extension()
-                    .map_or(false, |ext| ext == "jar")
-            })
+            .filter(|entry| entry.path().extension().map_or(false, |ext| ext == "jar"))
             .map(|entry| self.get_absolute_path(entry.path().to_path_buf()))
             .collect()
     }
@@ -207,7 +221,7 @@ impl DownloadOptions {
         // 解析json
         let json_value: serde_json::Value = serde_json::from_str(&res)?;
         let version_id = json_value["id"].as_str().unwrap_or("unknown");
-        
+
         // 获取asset_index_id
         let asset_index_id = json_value
             .get("assetIndex")
@@ -218,7 +232,6 @@ impl DownloadOptions {
 
         let paths = MinecraftPaths::new();
         paths.ensure_dirs()?;
-
 
         let version_path = paths.get_version_dir(version_id);
         std::fs::create_dir_all(&version_path)?;
@@ -264,7 +277,11 @@ impl DownloadOptions {
                         let xml_path = version_path.join("client-1.12.xml");
                         match download_file(xml_url.to_string(), xml_path).await {
                             Ok(info) => {
-                                println!("✅ 日志配置文件下载成功: {} -> {}", info.url, info.path.display());
+                                println!(
+                                    "✅ 日志配置文件下载成功: {} -> {}",
+                                    info.url,
+                                    info.path.display()
+                                );
                                 success_count += 1;
                             }
                             Err(e) => {
@@ -291,7 +308,10 @@ impl DownloadOptions {
                     let asset_content = response.fetch_get().await?;
                     let asset_json: serde_json::Value = serde_json::from_str(&asset_content)?;
                     // 保存资源索引文件
-                    let assets_index_path = paths.assets_dir.join("indexes").join(format!("{}.json", asset_id));
+                    let assets_index_path = paths
+                        .assets_dir
+                        .join("indexes")
+                        .join(format!("{}.json", asset_id));
                     if let Some(parent) = assets_index_path.parent() {
                         std::fs::create_dir_all(parent)?;
                     }
@@ -315,7 +335,8 @@ impl DownloadOptions {
                                     "https://resources.download.minecraft.net/{}/{}",
                                     hash_prefix, hash
                                 );
-                                let object_path = assets_path.join("objects").join(hash_prefix).join(hash);
+                                let object_path =
+                                    assets_path.join("objects").join(hash_prefix).join(hash);
 
                                 if let Some(parent) = object_path.parent() {
                                     let _ = std::fs::create_dir_all(parent);
@@ -432,7 +453,7 @@ impl DownloadOptions {
                 if let Some(libraries_array) = libraries.as_array() {
                     // 存储需要解压的文件信息
                     let natives_to_extract = Arc::new(Mutex::new(Vec::new()));
-                    
+
                     // 2.下载库文件
                     let download_tasks: Vec<_> = libraries_array
                         .iter()
@@ -445,12 +466,19 @@ impl DownloadOptions {
                                 if let Some(rules_array) = rules.as_array() {
                                     if let Some(first_rule) = rules_array.first() {
                                         if let Some(os) = first_rule.get("os") {
-                                            if let Some(name) = os.get("name").and_then(|n| n.as_str()) {
+                                            if let Some(name) =
+                                                os.get("name").and_then(|n| n.as_str())
+                                            {
                                                 if name == current_os {
                                                     // 如果rules第一项的os.name匹配当前系统，标记为需要解压
                                                     is_native = true;
-                                                    println!("📦 发现需要解压的natives库: {}", 
-                                                        library.get("name").and_then(|n| n.as_str()).unwrap_or("unknown"));
+                                                    println!(
+                                                        "📦 发现需要解压的natives库: {}",
+                                                        library
+                                                            .get("name")
+                                                            .and_then(|n| n.as_str())
+                                                            .unwrap_or("unknown")
+                                                    );
                                                 }
                                             }
                                         }
@@ -467,7 +495,7 @@ impl DownloadOptions {
                                     "linux" => "natives-linux",
                                     _ => return None,
                                 };
-                                
+
                                 if let Some(classifiers) = downloads.get("classifiers") {
                                     if let Some(native_download) = classifiers.get(natives_key) {
                                         native_download
@@ -489,7 +517,7 @@ impl DownloadOptions {
                             if let Some(parent) = library_path.parent() {
                                 let _ = std::fs::create_dir_all(parent);
                             }
-                            
+
                             Some((url.to_string(), library_path, sha1.to_string(), is_native))
                         })
                         .collect();
@@ -529,9 +557,16 @@ impl DownloadOptions {
                                             // 将需要解压的文件信息存储起来
                                             let mut natives = natives_to_extract.lock().unwrap();
                                             natives.push((info.path.clone(), version_id.clone()));
-                                            println!("✅ natives库下载成功，已加入解压队列: {}", info.path.display());
+                                            println!(
+                                                "✅ natives库下载成功，已加入解压队列: {}",
+                                                info.path.display()
+                                            );
                                         }
-                                        println!("✅ 库文件下载成功: {} -> {}", info.url, info.path.display());
+                                        println!(
+                                            "✅ 库文件下载成功: {} -> {}",
+                                            info.url,
+                                            info.path.display()
+                                        );
                                         success_counter.fetch_add(1, Ordering::SeqCst);
                                     }
                                     Err(e) => {
@@ -547,38 +582,45 @@ impl DownloadOptions {
 
                     // 所有文件下载完成后，开始解压natives库
                     let natives = natives_to_extract.lock().unwrap().clone();
-                    
+
                     if !natives.is_empty() {
                         println!("📦 开始解压 {} 个natives库...", natives.len());
-                        
+
                         for (file_path, version_id) in natives {
                             let natives_dir = paths.get_natives_dir(&version_id);
                             println!("🔄 正在解压: {}", file_path.display());
                             println!("📂 解压目标目录: {}", natives_dir.display());
-                            
+
                             // 在新线程中执行解压操作
                             if let Err(e) = tokio::task::spawn_blocking(move || {
                                 if let Err(e) = std::fs::create_dir_all(&natives_dir) {
                                     println!("❌ 创建natives目录失败: {}", e);
                                     return Err(e.to_string());
                                 }
-                                
+
                                 match decompression(file_path.to_str().unwrap(), &version_id) {
                                     Ok(_) => {
                                         println!("✅ natives库解压成功: {}", file_path.display());
                                         Ok(())
                                     }
                                     Err(e) => {
-                                        println!("❌ natives库解压失败: {} -> {}", file_path.display(), e);
+                                        println!(
+                                            "❌ natives库解压失败: {} -> {}",
+                                            file_path.display(),
+                                            e
+                                        );
                                         Err(e.to_string())
                                     }
                                 }
-                            }).await.unwrap() {
+                            })
+                            .await
+                            .unwrap()
+                            {
                                 println!("❌ 解压过程出错: {}", e);
                                 failed_counter.fetch_add(1, Ordering::SeqCst);
                             }
                         }
-                        
+
                         println!("📦 natives库解压完成");
                     }
 
@@ -598,7 +640,7 @@ impl DownloadOptions {
         // 修改执行顺序，先执行 libraries 下载和解压
         let libraries_result = libraries_future.await;
         let (_libs_success, _libs_failed, libs_duration) = libraries_result;
-        
+
         // 然后执行资源索引文件下载
         let assets_result = assets_future.await;
         let _assets_result = assets_result?;

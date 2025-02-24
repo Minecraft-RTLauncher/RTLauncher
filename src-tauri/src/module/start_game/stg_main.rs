@@ -1,3 +1,22 @@
+/*
+RTLauncher, a third-party Minecraft launcher built with the newest
+technology and provides innovative funtionalities
+Copyright (C) 2025 lutouna
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 // ***
 // 启动游戏主函数
 // ***
@@ -24,9 +43,14 @@ pub async fn stg(
     asset_index_id: String,
     username: String,
 ) -> Result<String, String> {
-    let start_game = StartGame::new(startup_parameter, version_id, java_version, asset_index_id, username);
+    let start_game = StartGame::new(
+        startup_parameter,
+        version_id,
+        java_version,
+        asset_index_id,
+        username,
+    );
     match start_game.start_game() {
-
         Ok(output) => Ok(output),
         Err(e) => Err(format!("游戏启动失败: {}", e)),
     }
@@ -75,7 +99,8 @@ impl StartGame {
             })
             .unwrap_or_default();
 
-        let launch_args = Self::load_launch_args(startup_parameter, &version_id, &asset_index_id, username);
+        let launch_args =
+            Self::load_launch_args(startup_parameter, &version_id, &asset_index_id, username);
 
         Self {
             java_path,
@@ -174,7 +199,6 @@ impl StartGame {
             paths.assets_dir.to_string_lossy().into_owned(),
             "--assetIndex".to_string(),
             asset_index_id.to_string(),
-
         ]);
 
         args

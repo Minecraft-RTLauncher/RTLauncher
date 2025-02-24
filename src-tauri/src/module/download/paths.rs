@@ -1,3 +1,22 @@
+/*
+RTLauncher, a third-party Minecraft launcher built with the newest
+technology and provides innovative funtionalities
+Copyright (C) 2025 lutouna
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 // ***
 // 路径配置管理模块
 // ***
@@ -27,7 +46,8 @@ impl MinecraftPaths {
     }
 
     pub fn get_natives_dir(&self, version_id: &str) -> PathBuf {
-        self.get_version_dir(version_id).join(format!("{}-natives", version_id))
+        self.get_version_dir(version_id)
+            .join(format!("{}-natives", version_id))
     }
 
     #[allow(dead_code)]

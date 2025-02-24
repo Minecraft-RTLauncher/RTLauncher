@@ -1,3 +1,22 @@
+/*
+RTLauncher, a third-party Minecraft launcher built with the newest
+technology and provides innovative funtionalities
+Copyright (C) 2025 lutouna
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 // ***
 // 获取java_home路径
 // ***
@@ -6,7 +25,6 @@ use std::env::consts::OS;
 use std::path::Path;
 use std::process::Command;
 use walkdir::WalkDir;
-
 
 // 主方法
 #[tauri::command]
@@ -63,9 +81,7 @@ fn get_macos_java_path() -> Vec<String> {
     let mut paths = Vec::new();
 
     // 通过 /usr/libexec/java_home -V 命令获取所有版本
-    if let Ok(output) = Command::new("/usr/libexec/java_home")
-        .arg("-V")
-        .output() {
+    if let Ok(output) = Command::new("/usr/libexec/java_home").arg("-V").output() {
         if let Ok(stderr) = String::from_utf8(output.stderr) {
             for line in stderr.lines() {
                 if line.contains("Java SE") {
@@ -95,7 +111,8 @@ fn get_linux_java_path() -> Vec<String> {
     if let Ok(output) = Command::new("update-alternatives")
         .arg("--list")
         .arg("java")
-        .output() {
+        .output()
+    {
         if let Ok(path_list) = String::from_utf8(output.stdout) {
             for java_path in path_list.lines() {
                 if let Some(parent) = Path::new(java_path).parent().and_then(|p| p.parent()) {
@@ -120,7 +137,6 @@ fn scan_for_java_installation() -> Vec<String> {
             "C:\\Program Files (x86)\\Java",
             "D:\\Program Files\\Java",
             "D:\\Program Files (x86)\\Java",
-            
         ],
         "macos" => vec![
             "/Library/Java/JavaVirtualMachines",
@@ -128,12 +144,7 @@ fn scan_for_java_installation() -> Vec<String> {
             "/usr/local/opt/java",
             "/opt/homebrew/opt/java",
         ],
-        "linux" => vec![
-            "/usr/lib/jvm",
-            "/usr/java",
-            "/opt/java",
-            "/usr/local/java",
-        ],
+        "linux" => vec!["/usr/lib/jvm", "/usr/java", "/opt/java", "/usr/local/java"],
         _ => vec![],
     };
 
@@ -148,10 +159,10 @@ fn scan_for_java_installation() -> Vec<String> {
             .into_iter()
             .filter_entry(|e| {
                 let file_name = e.file_name().to_string_lossy().to_lowercase();
-                !file_name.starts_with(".") && 
-                (file_name.contains("jdk") || 
-                 file_name.contains("jre") || 
-                 file_name.contains("java"))
+                !file_name.starts_with(".")
+                    && (file_name.contains("jdk")
+                        || file_name.contains("jre")
+                        || file_name.contains("java"))
             });
 
         for entry in walker.filter_map(|e| e.ok()) {
