@@ -1,13 +1,13 @@
 import type { EventType, EventPayloadMap, EventHandler } from './event';
 
 class EventBus {
-  // 存储结构：事件类型 => 原始处理器 => 包装器集合
+  // 存储结构：事件类型 => 原始处理器 => 包装器
   private handlerMap = new Map<
     EventType,
     Map<EventHandler<any>, Set<Function>>
   >();
 
-  // 🚀 发布事件（自动类型校验）
+  // 发布事件
   emit<T extends EventType>(event: T, payload: EventPayloadMap[T]): void {
     const handlers = this.handlerMap.get(event);
     if (!handlers) return;
@@ -17,7 +17,7 @@ class EventBus {
     });
   }
 
-  // 📩 订阅事件（保持原始引用）
+  // 订阅事件
   on<T extends EventType>(event: T, handler: EventHandler<T>) {
     const wrapper = (payload: EventPayloadMap[T]) => handler(payload);
 
@@ -37,7 +37,7 @@ class EventBus {
     };
   }
 
-  // 🧹 取消订阅（精准删除）
+  // 取消订阅
   off<T extends EventType>(event: T, handler: EventHandler<T>) {
     const handlers = this.handlerMap.get(event);
     if (!handlers) return;
