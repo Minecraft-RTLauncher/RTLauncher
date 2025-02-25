@@ -1,0 +1,32 @@
+/* src/assets/css/animations.css */
+/* 命名规则：.animate-<自定义动画名称> */
+
+/* 淡入淡出 */
+.animate-fade {
+  animation: fade 0.3s ease-out;
+}
+
+@keyframes fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 滑动效果 */
+.animate-slide {
+  animation: slide 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@keyframes slide {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+/* 新增旋转动画（无需修改TS代码） */
+.animate-spin {
+  animation: spin 0.6s linear;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
